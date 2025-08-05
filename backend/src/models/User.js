@@ -1,151 +1,61 @@
-const { DataTypes } = require('sequelize');
+// backend/src/models/User.js
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { sequelize } = require('../config/database');
 
-const User = sequelize.define('User', {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      len: [2, 100],
-    },
+const userSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true
   },
   email: {
-    type: DataTypes.STRING,
-    allowNull: false,
+    type: String,
+    required: true,
     unique: true,
-    validate: {
-      isEmail: true,
-    },
+    lowercase: true
   },
   password: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      len: [6, 255],
-    },
-  },
-  role: {
-    type: DataTypes.ENUM('admin', 'user', 'moderator'),
-    defaultValue: 'user',
-  },
-  isEmailVerified: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false,
-  },
-  emailVerificationToken: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  emailVerificationExpires: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  passwordResetToken: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  passwordResetExpires: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  lastLoginAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-  },
-  isActive: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true,
-  },
-  preferences: {
-    type: DataTypes.JSONB,
-    defaultValue: {},
+    type: String,
+    required: true,
+    minlength: 6
   },
   avatar: {
-    type: DataTypes.STRING,
-    allowNull: true,
+    type: String,
+    default: null
   },
-  phone: {
-    type: DataTypes.STRING,
-    allowNull: true,
+  isOnline: {
+    type: Boolean,
+    default: false
   },
-  timezone: {
-    type: DataTypes.STRING,
-    defaultValue: 'UTC',
+  lastSeen: {
+    type: Date,
+    default: Date.now
   },
-  language: {
-    type: DataTypes.STRING,
-    defaultValue: 'en',
-  },
+  socketId: {
+    type: String,
+    default: null
+  }
 }, {
-  tableName: 'users',
-  timestamps: true,
-  paranoid: true, // Soft deletes
-  hooks: {
-    beforeCreate: async (user) => {
-      if (user.password) {
-        user.password = await bcrypt.hash(user.password, 12);
-      }
-    },
-    beforeUpdate: async (user) => {
-      if (user.changed('password')) {
-        user.password = await bcrypt.hash(user.password, 12);
-      }
-    },
-  },
+  timestamps: true
 });
 
-// Instance methods
-User.prototype.comparePassword = async function(candidatePassword) {
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-User.prototype.toJSON = function() {
-  const values = Object.assign({}, this.get());
-  delete values.password;
-  delete values.emailVerificationToken;
-  delete values.passwordResetToken;
-  return values;
-};
-
-// Class methods
-User.findByEmail = function(email) {
-  return this.findOne({ where: { email } });
-};
-
-User.findByEmailAndRole = function(email, role) {
-  return this.findOne({ where: { email, role } });
-};
-
-User.findActiveUsers = function() {
-  return this.findAll({ where: { isActive: true } });
-};
-
-User.findByVerificationToken = function(token) {
-  return this.findOne({
-    where: {
-      emailVerificationToken: token,
-      emailVerificationExpires: {
-        [sequelize.Op.gt]: new Date(),
-      },
-    },
-  });
-};
-
-User.findByResetToken = function(token) {
-  return this.findOne({
-    where: {
-      passwordResetToken: token,
-      passwordResetExpires: {
-        [sequelize.Op.gt]: new Date(),
-      },
-    },
-  });
-};
-
-module.exports = User; 
+module.exports = mongoose.model('User', userSchema);

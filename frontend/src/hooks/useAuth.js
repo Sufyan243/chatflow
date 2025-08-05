@@ -16,7 +16,29 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // 🚧 Development mode flag - set to false for production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const DEV_BYPASS = isDevelopment && process.env.REACT_APP_DEV_BYPASS === 'true';
+
   useEffect(() => {
+    // 🚧 Development bypass - automatically set guest user
+    if (DEV_BYPASS) {
+      console.log('🔧 Development mode: Bypassing authentication');
+      const guestUser = {
+        id: 'dev-guest-' + Date.now(),
+        username: 'Dev User',
+        email: 'dev@chatflow.local',
+        avatar: null,
+        role: 'developer',
+        isOnline: true,
+        isDevelopmentUser: true
+      };
+      setUser(guestUser);
+      setLoading(false);
+      return;
+    }
+
+    // Normal authentication flow
     const token = localStorage.getItem('token');
     if (token) {
       authService.getCurrentUser()
@@ -32,7 +54,7 @@ export const AuthProvider = ({ children }) => {
     } else {
       setLoading(false);
     }
-  }, []);
+  }, [DEV_BYPASS]);
 
   const login = async (email, password) => {
     try {
@@ -67,6 +89,23 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    // 🚧 In dev mode, just reset to guest user instead of full logout
+    if (DEV_BYPASS) {
+      console.log('🔧 Development mode: Resetting to guest user');
+      const guestUser = {
+        id: 'dev-guest-' + Date.now(),
+        username: 'Dev User',
+        email: 'dev@chatflow.local',
+        avatar: null,
+        role: 'developer',
+        isOnline: true,
+        isDevelopmentUser: true
+      };
+      setUser(guestUser);
+      setError(null);
+      return;
+    }
+
     localStorage.removeItem('token');
     setUser(null);
     setError(null);
@@ -76,6 +115,15 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
+      
+      // 🚧 Development bypass for profile updates
+      if (DEV_BYPASS) {
+        console.log('🔧 Development mode: Mocking profile update');
+        const updatedUser = { ...user, ...profileData };
+        setUser(updatedUser);
+        return updatedUser;
+      }
+
       const updatedUser = await authService.updateProfile(profileData);
       setUser(updatedUser);
       return updatedUser;
@@ -91,6 +139,13 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
+      
+      // 🚧 Development bypass for password changes
+      if (DEV_BYPASS) {
+        console.log('🔧 Development mode: Mocking password change');
+        return;
+      }
+
       await authService.changePassword(currentPassword, newPassword);
     } catch (err) {
       setError(err.message);
@@ -104,6 +159,13 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
+      
+      // 🚧 Development bypass for forgot password
+      if (DEV_BYPASS) {
+        console.log('🔧 Development mode: Mocking forgot password');
+        return;
+      }
+
       await authService.forgotPassword(email);
     } catch (err) {
       setError(err.message);
@@ -117,6 +179,13 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
+      
+      // 🚧 Development bypass for password reset
+      if (DEV_BYPASS) {
+        console.log('🔧 Development mode: Mocking password reset');
+        return;
+      }
+
       await authService.resetPassword(token, newPassword);
     } catch (err) {
       setError(err.message);
@@ -126,17 +195,65 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 🆕 Add this method
+  // 🆕 Manual skip login for development (can be called from UI)
   const skipLogin = () => {
     const guestUser = {
-      id: 'guest',
-      name: 'Guest User',
-      email: 'guest@example.com',
+      id: 'manual-guest-' + Date.now(),
+      username: 'Guest User',
+      email: 'guest@chatflow.local',
+      avatar: null,
       role: 'guest',
+      isOnline: true,
+      isDevelopmentUser: true
     };
     setUser(guestUser);
     setLoading(false);
-    console.log('⏭️ Skipped login, guest user set:', guestUser);
+    console.log('⏭️ Manually skipped login, guest user set:', guestUser);
+  };
+
+  // 🚧 Development helper to switch between different test users
+  const switchDevUser = (userType = 'default') => {
+    if (!isDevelopment) return;
+
+    const devUsers = {
+      default: {
+        id: 'dev-user-1',
+        username: 'Dev User',
+        email: 'dev@chatflow.local',
+        avatar: null,
+        role: 'developer'
+      },
+      admin: {
+        id: 'dev-admin-1',
+        username: 'Dev Admin',
+        email: 'admin@chatflow.local',
+        avatar: null,
+        role: 'admin'
+      },
+      user2: {
+        id: 'dev-user-2',
+        username: 'Test User 2',
+        email: 'user2@chatflow.local',
+        avatar: null,
+        role: 'user'
+      },
+      user3: {
+        id: 'dev-user-3',
+        username: 'Test User 3',
+        email: 'user3@chatflow.local',
+        avatar: null,
+        role: 'user'
+      }
+    };
+
+    const selectedUser = {
+      ...devUsers[userType],
+      isOnline: true,
+      isDevelopmentUser: true
+    };
+
+    setUser(selectedUser);
+    console.log(`🔧 Switched to dev user: ${userType}`, selectedUser);
   };
 
   const clearError = () => {
@@ -155,8 +272,11 @@ export const AuthProvider = ({ children }) => {
     forgotPassword,
     resetPassword,
     clearError,
-    skipLogin, // 🧩 added to context
+    skipLogin,
+    switchDevUser, // 🚧 Development helper
     isAuthenticated: !!user,
+    isDevelopment,
+    DEV_BYPASS, // 🚧 Expose dev bypass flag
   };
 
   return (
